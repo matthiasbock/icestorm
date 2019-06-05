@@ -1,2 +1,13 @@
 icestorm-win32.zip
 icestorm-win32/
+
+# Python-generated
+icetime/timings-*.cc
+
+# Ecplise
+.project
+.cproject
+.pydevproject
+.settings
+.metadata
+
