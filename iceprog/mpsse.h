@@ -22,6 +22,14 @@
 
 #include <stdint.h>
 
+/*
+ * Pin masks
+ */
+#define MPSSE_PIN_ADBUS3	0x08
+#define MPSSE_PIN_ADBUS4	0x10
+#define MPSSE_PIN_ADBUS7	0x80
+
+
 void mpsse_check_rx(void);
 void mpsse_error(int status);
 uint8_t mpsse_recv_byte(void);

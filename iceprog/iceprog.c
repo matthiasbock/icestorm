@@ -91,16 +91,25 @@ enum flash_cmd {
 static void set_cs_creset(int cs_b, int creset_b)
 {
 	uint8_t gpio = 0;
-	uint8_t direction = 0x93;
+
+	/*
+	 * Direction:
+	 * 0 = input
+	 * 1 = output
+	 */
+//	uint8_t direction = 0x93;
+//	uint8_t direction = 0b10010011;
+	uint8_t direction = 0b10001011;
 
 	if (cs_b) {
 		// ADBUS4 (GPIOL0)
-		gpio |= 0x10;
+//		gpio |= MPSSE_PIN_ADBUS4;
+		gpio |= MPSSE_PIN_ADBUS3;
 	}
 
 	if (creset_b) {
 		// ADBUS7 (GPIOL3)
-		gpio |= 0x80;
+		gpio |= MPSSE_PIN_ADBUS7;
 	}
 
 	mpsse_set_gpio(gpio, direction);
