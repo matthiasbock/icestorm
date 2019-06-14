@@ -167,7 +167,7 @@ uint8_t mpsse_recv_byte()
 		}
 		if (rc == 1)
 			break;
-		usleep(100);
+		usleep(500);
 	}
 	return data;
 }
@@ -208,6 +208,7 @@ void mpsse_xfer_spi(uint8_t *data, int n)
 	mpsse_send_byte(n - 1);
 	mpsse_send_byte((n - 1) >> 8);
 
+	ftdi_usb_purge_buffers(&mpsse_ftdic);
 	int rc = ftdi_write_data(&mpsse_ftdic, data, n);
 	if (rc != n) {
 		fprintf(stderr, "Write error (chunk, rc=%d, expected %d).\n", rc, n);
@@ -334,7 +335,7 @@ void mpsse_init(int ifnum, const char *devstr, bool slow_clock)
 
 	fprintf(stderr, "Previous latency: %d ms (datasheet recommends a value between 2 and 255)\n", previous_mpsse_ftdi_latency);
 
-	unsigned char new_latency = 1;
+	unsigned char new_latency = 2;
 	fprintf(stderr, "Setting new latency: %d ms ...\n", new_latency);
 
 	/* 1 is the fastest polling, it means 1 kHz polling */
@@ -371,7 +372,7 @@ void mpsse_init(int ifnum, const char *devstr, bool slow_clock)
 	} else {
 		// set 6 MHz clock
 		mpsse_send_byte(MC_SET_CLK_DIV);
-		mpsse_send_byte(0x00);
+		mpsse_send_byte(1);
 		mpsse_send_byte(0x00);
 	}
 }
