@@ -171,8 +171,9 @@ static void flash_read_id()
 	 *        4 | Ext Dev Str Len
 	 */
 
-	uint8_t data[260] = { FC_JEDECID };
-	int len = 5; // command + 4 response bytes
+	uint8_t data[20] = { FC_JEDECID };
+//	int len = 5; // command + 4 response bytes
+	int len = 4;
 
 	if (verbose)
 		fprintf(stderr, "read flash ID..\n");
@@ -187,10 +188,10 @@ static void flash_read_id()
 				"this is likely a read error. Ignorig...\n");
 	else {
 		// Read extended JEDEC ID bytes
-		if (data[4] != 0) {
-			len += data[4];
-			mpsse_xfer_spi(data + 5, len - 5);
-		}
+//		if (data[4] != 0) {
+//			len += data[4];
+//			mpsse_xfer_spi(data + 5, len - 5);
+//		}
 	}
 
 	flash_chip_deselect();
