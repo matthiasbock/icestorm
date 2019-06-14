@@ -946,6 +946,17 @@ int main(int argc, char **argv)
 				flash_read(rw_offset + addr, buffer_flash, rc);
 				if (memcmp(buffer_file, buffer_flash, rc)) {
 					fprintf(stderr, "Found difference between flash and file!\n");
+
+					if (verbose)
+					{
+						fprintf(stderr, "Expected:\n");
+						for (int i = 0; i < rc; i++)
+							fprintf(stderr, "%02x%c", buffer_file[i], i == rc - 1 || i % 32 == 31 ? '\n' : ' ');
+						fprintf(stderr, "But instead got:\n");
+						for (int i = 0; i < rc; i++)
+							fprintf(stderr, "%02x%c", buffer_flash[i], i == rc - 1 || i % 32 == 31 ? '\n' : ' ');
+					}
+
 					mpsse_error(3);
 				}
 			}

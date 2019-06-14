@@ -52,7 +52,7 @@
 struct ftdi_context mpsse_ftdic;
 bool mpsse_ftdic_open = false;
 bool mpsse_ftdic_latency_set = false;
-unsigned char mpsse_ftdi_latency;
+unsigned char previous_mpsse_ftdi_latency;
 
 /* MPSSE engine command definitions */
 enum mpsse_cmd
@@ -149,7 +149,7 @@ void mpsse_error(int status)
 	fprintf(stderr, "ABORT.\n");
 	if (mpsse_ftdic_open) {
 		if (mpsse_ftdic_latency_set)
-			ftdi_set_latency_timer(&mpsse_ftdic, mpsse_ftdi_latency);
+			ftdi_set_latency_timer(&mpsse_ftdic, previous_mpsse_ftdi_latency);
 		ftdi_usb_close(&mpsse_ftdic);
 	}
 	ftdi_deinit(&mpsse_ftdic);
@@ -300,10 +300,18 @@ void mpsse_init(int ifnum, const char *devstr, bool slow_clock)
 			fprintf(stderr, "Can't find iCE FTDI USB device (device string %s).\n", devstr);
 			mpsse_error(2);
 		}
+		else
+		{
+			fprintf(stderr, "ftdi_usb_open_string() succeeded.\n");
+		}
 	} else {
 		if (ftdi_usb_open(&mpsse_ftdic, 0x0403, 0x6010) && ftdi_usb_open(&mpsse_ftdic, 0x0403, 0x6014)) {
 			fprintf(stderr, "Can't find iCE FTDI USB device (vendor_id 0x0403, device_id 0x6010 or 0x6014).\n");
 			mpsse_error(2);
+		}
+		else
+		{
+			fprintf(stderr, "ftdi_usb_open() succeeded.\n");
 		}
 	}
 
@@ -319,15 +327,29 @@ void mpsse_init(int ifnum, const char *devstr, bool slow_clock)
 		mpsse_error(2);
 	}
 
-	if (ftdi_get_latency_timer(&mpsse_ftdic, &mpsse_ftdi_latency) < 0) {
+	if (ftdi_get_latency_timer(&mpsse_ftdic, &previous_mpsse_ftdi_latency) < 0) {
 		fprintf(stderr, "Failed to get latency timer (%s).\n", ftdi_get_error_string(&mpsse_ftdic));
 		mpsse_error(2);
 	}
 
+	fprintf(stderr, "Previous latency: %d ms (datasheet recommends a value between 2 and 255)\n", previous_mpsse_ftdi_latency);
+
+	unsigned char new_latency = 1;
+	fprintf(stderr, "Setting new latency: %d ms ...\n", new_latency);
+
 	/* 1 is the fastest polling, it means 1 kHz polling */
-	if (ftdi_set_latency_timer(&mpsse_ftdic, 1) < 0) {
+	if (ftdi_set_latency_timer(&mpsse_ftdic, new_latency) < 0) {
 		fprintf(stderr, "Failed to set latency timer (%s).\n", ftdi_get_error_string(&mpsse_ftdic));
 		mpsse_error(2);
+	}
+
+	unsigned char latency_readback;
+	ftdi_get_latency_timer(&mpsse_ftdic, &latency_readback);
+	fprintf(stderr, "Read back latency: %d ms.\n", latency_readback);
+
+	if (latency_readback != new_latency)
+	{
+		fprintf(stderr, "Warning: It appears that something went wrong while setting the latency!\n");
 	}
 
 	mpsse_ftdic_latency_set = true;
@@ -356,7 +378,7 @@ void mpsse_init(int ifnum, const char *devstr, bool slow_clock)
 
 void mpsse_close(void)
 {
-	ftdi_set_latency_timer(&mpsse_ftdic, mpsse_ftdi_latency);
+	ftdi_set_latency_timer(&mpsse_ftdic, previous_mpsse_ftdi_latency);
 	ftdi_disable_bitbang(&mpsse_ftdic);
 	ftdi_usb_close(&mpsse_ftdic);
 	ftdi_deinit(&mpsse_ftdic);
