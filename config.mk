@@ -11,7 +11,7 @@ ifeq ($(DEBUG),1)
 OPT_LEVEL ?= 0
 DBG_LEVEL ?= -ggdb
 else
-OPT_LEVEL ?= 2
+OPT_LEVEL ?= 3
 DBG_LEVEL ?=
 endif
 WARN_LEVEL ?= all

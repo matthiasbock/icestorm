@@ -88,7 +88,7 @@ enum flash_cmd {
 // Hardware specific CS, CReset, CDone functions
 // ---------------------------------------------------------
 
-static void set_cs_creset(int cs_b, int creset_b)
+static inline void set_cs_creset(int cs_b, int creset_b)
 {
 	uint8_t gpio = 0;
 
@@ -99,7 +99,7 @@ static void set_cs_creset(int cs_b, int creset_b)
 	 */
 //	uint8_t direction = 0x93;
 //	uint8_t direction = 0b10010011;
-	uint8_t direction = 0b10001011;
+	const uint8_t direction = 0b10001011;
 
 	if (cs_b) {
 		// ADBUS4 (GPIOL0)
@@ -115,7 +115,25 @@ static void set_cs_creset(int cs_b, int creset_b)
 	mpsse_set_gpio(gpio, direction);
 }
 
-static bool get_cdone(void)
+static inline void set_pins_highz()
+{
+	fprintf(stdout, "Switching FTDI pins to high-impedance...");
+	fflush(stdout);
+
+	/*
+	 * Direction:
+	 * 0 = input
+	 * 1 = output
+	 */
+	const uint8_t direction = 0b00000000;
+	const uint8_t gpio = 0;
+	mpsse_set_gpio(gpio, direction);
+
+	fprintf(stdout, "done.\n");
+	fflush(stdout);
+}
+
+static inline bool get_cdone(void)
 {
 	// ADBUS6 (GPIOL2)
 	return (mpsse_readb_low() & 0x40) != 0;
@@ -126,27 +144,27 @@ static bool get_cdone(void)
 // ---------------------------------------------------------
 
 // the FPGA reset is released so also FLASH chip select should be deasserted
-static void flash_release_reset()
+static inline void flash_release_reset()
 {
 	set_cs_creset(1, 1);
 }
 
 // FLASH chip select assert
 // should only happen while FPGA reset is asserted
-static void flash_chip_select()
+static inline void flash_chip_select()
 {
 	set_cs_creset(0, 0);
 }
 
 // FLASH chip select deassert
-static void flash_chip_deselect()
+static inline void flash_chip_deselect()
 {
 	set_cs_creset(1, 0);
 }
 
 // SRAM reset is the same as flash_chip_select()
 // For ease of code reading we use this function instead
-static void sram_reset()
+static inline void sram_reset()
 {
 	// Asserting chip select and reset lines
 	set_cs_creset(0, 0);
@@ -154,12 +172,12 @@ static void sram_reset()
 
 // SRAM chip select assert
 // When accessing FPGA SRAM the reset should be released
-static void sram_chip_select()
+static inline void sram_chip_select()
 {
 	set_cs_creset(0, 1);
 }
 
-static void flash_read_id()
+static inline void flash_read_id()
 {
 	/* JEDEC ID structure:
 	 * Byte No. | Data Type
@@ -198,14 +216,28 @@ static void flash_read_id()
 
 	// TODO: Add full decode of the JEDEC ID.
 	fprintf(stderr, "flash ID:");
-	for (int i = 1; i < len; i++)
+	for (int i = 1; i <= len; i++)
 		fprintf(stderr, " 0x%02X", data[i]);
 	fprintf(stderr, "\n");
+
+	if ((data[0] == 0xFF)
+	 && (data[1] == 0xFF)
+	 && (data[2] == 0xFF)
+	 && (data[3] == 0xFF))
+	{
+		fprintf(stderr, "Illegal flash ID. Aborting.\n");
+		set_pins_highz();
+		exit(1);
+	}
 }
 
-static void flash_reset()
+static inline void flash_reset()
 {
 	flash_chip_select();
+
+	// Wait for at least 10ms
+	usleep(10000);
+
 	mpsse_xfer_spi_bits(0xFF, 8);
 	flash_chip_deselect();
 
@@ -214,7 +246,7 @@ static void flash_reset()
 	flash_chip_deselect();
 }
 
-static void flash_power_up()
+static inline void flash_power_up()
 {
 	uint8_t data_rpd[1] = { FC_RPD };
 	flash_chip_select();
@@ -222,7 +254,7 @@ static void flash_power_up()
 	flash_chip_deselect();
 }
 
-static void flash_power_down()
+static inline void flash_power_down()
 {
 	uint8_t data[1] = { FC_PD };
 	flash_chip_select();
@@ -230,7 +262,7 @@ static void flash_power_down()
 	flash_chip_deselect();
 }
 
-static uint8_t flash_read_status()
+static inline uint8_t flash_read_status()
 {
 	uint8_t data[2] = { FC_RSR1 };
 
@@ -286,7 +318,7 @@ static uint8_t flash_read_status()
 	return data[1];
 }
 
-static void flash_write_enable()
+static inline void flash_write_enable()
 {
 	if (verbose) {
 		fprintf(stderr, "status before enable:\n");
@@ -307,7 +339,7 @@ static void flash_write_enable()
 	}
 }
 
-static void flash_bulk_erase()
+static inline void flash_bulk_erase()
 {
 	fprintf(stderr, "bulk erase..\n");
 
@@ -317,7 +349,7 @@ static void flash_bulk_erase()
 	flash_chip_deselect();
 }
 
-static void flash_64kB_sector_erase(int addr)
+static inline void flash_64kB_sector_erase(int addr)
 {
 	fprintf(stderr, "erase 64kB sector at 0x%06X..\n", addr);
 
@@ -328,7 +360,7 @@ static void flash_64kB_sector_erase(int addr)
 	flash_chip_deselect();
 }
 
-static void flash_prog(int addr, uint8_t *data, int n)
+static inline void flash_prog(int addr, uint8_t *data, int n)
 {
 	if (verbose)
 		fprintf(stderr, "prog 0x%06X +0x%03X..\n", addr, n);
@@ -345,7 +377,7 @@ static void flash_prog(int addr, uint8_t *data, int n)
 			fprintf(stderr, "%02x%c", data[i], i == n - 1 || i % 32 == 31 ? '\n' : ' ');
 }
 
-static void flash_read(int addr, uint8_t *data, int n)
+static inline void flash_read(int addr, uint8_t *data, int n)
 {
 	if (verbose)
 		fprintf(stderr, "read 0x%06X +0x%03X..\n", addr, n);
@@ -363,12 +395,13 @@ static void flash_read(int addr, uint8_t *data, int n)
 			fprintf(stderr, "%02x%c", data[i], i == n - 1 || i % 32 == 31 ? '\n' : ' ');
 }
 
-static void flash_wait()
+static inline void flash_wait()
 {
 	if (verbose)
 		fprintf(stderr, "waiting..");
 
 	int count = 0;
+	int timeout = 0;
 	while (1)
 	{
 		uint8_t data[2] = { FC_RSR1 };
@@ -396,6 +429,13 @@ static void flash_wait()
 				fprintf(stderr, ".");
 				fflush(stderr);
 			}
+			if (timeout++ > 200)
+			{
+				fprintf(stderr, "Timeout. Aborting.\n");
+				set_pins_highz();
+				mpsse_close();
+				exit(1);
+			}
 			count = 0;
 		}
 
@@ -407,7 +447,7 @@ static void flash_wait()
 
 }
 
-static void flash_disable_protection()
+static inline void flash_disable_protection()
 {
 	fprintf(stderr, "disable flash protection...\n");
 
@@ -983,6 +1023,8 @@ int main(int argc, char **argv)
 	// ---------------------------------------------------------
 	// Exit
 	// ---------------------------------------------------------
+
+	set_pins_highz();
 
 	fprintf(stderr, "Bye.\n");
 	mpsse_close();
