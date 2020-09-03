@@ -90,48 +90,112 @@ enum flash_cmd {
 
 static inline void set_cs_creset(int cs_b, int creset_b)
 {
-	uint8_t gpio = 0;
+	/*
+	 * Configure the pin directions to match the hardware.
+	 *
+	 * See also: InCircuit ICprog OpenOCD schematic
+	 */
+	uint16_t direction = 0;
+	uint16_t gpio = 0;
 
 	/*
 	 * Direction:
-	 * 0 = input
-	 * 1 = output
+	 * 	0 = input
+	 * 	1 = output
+	 *
+	 * According to FTDI AN-108 page 6 the direction of pins
+	 * ADBUS 0 through 3 can't be changed (clock out, data out, data in, select out).
+	 * That would be bad, since this would result in a collision between
+	 * the FPGA configuring itself and the debugger.
+	 * TODO: Confirm...
 	 */
-//	uint8_t direction = 0x93;
-//	uint8_t direction = 0b10010011;
-	const uint8_t direction = 0b10001011;
-
-	if (cs_b) {
-		// ADBUS4 (GPIOL0)
-//		gpio |= MPSSE_PIN_ADBUS4;
-		gpio |= MPSSE_PIN_ADBUS3;
+	if (cs_b)
+	{
+		/*
+		 * At least attempt to set the outputs to high-z.
+		 * Don't know if the chip will do this...
+		 */
+		direction &= ~(MPSSE_PIN_ADBUS(0) | MPSSE_PIN_ADBUS(1) | MPSSE_PIN_ADBUS(2) | MPSSE_PIN_ADBUS(3));
 	}
-
-	if (creset_b) {
-		// ADBUS7 (GPIOL3)
-		gpio |= MPSSE_PIN_ADBUS7;
+	else
+	{
+		/*
+		 * When the inverted slave select signal is asserted,
+		 * the communication pins must be configured for a transfer.
+		 */
+		direction |= MPSSE_PIN_ADBUS(0);
+		direction |= MPSSE_PIN_ADBUS(1);
+		direction &= ~(MPSSE_PIN_ADBUS(2));
+		direction |= MPSSE_PIN_ADBUS(3);
 	}
-
-	mpsse_set_gpio(gpio, direction);
-}
-
-static inline void set_pins_highz()
-{
-	fprintf(stdout, "Switching FTDI pins to high-impedance...");
-	fflush(stdout);
 
 	/*
-	 * Direction:
-	 * 0 = input
-	 * 1 = output
+	 * Pins ACBUS 0 through 3 must be outputs
+	 * as they control the reset buffers.
 	 */
-	const uint8_t direction = 0b00000000;
-	const uint8_t gpio = 0;
-	mpsse_set_gpio(gpio, direction);
+	direction |= MPSSE_PIN_ACBUS(0);
+	direction |= MPSSE_PIN_ACBUS(1);
+	direction |= MPSSE_PIN_ACBUS(2);
+	direction |= MPSSE_PIN_ACBUS(3);
 
-	fprintf(stdout, "done.\n");
-	fflush(stdout);
+	/*
+	 * ACBUS 1 and 3 must always be low,
+	 * such that the reset buffer outputs are driven low,
+	 * when their respective output enable input (/OE) is asserted.
+	 */
+	gpio &= ~(MPSSE_PIN_ACBUS(1));
+	gpio &= ~(MPSSE_PIN_ACBUS(3));
+
+	/*
+	 * Pin ADBUS 7 must be an input.
+	 * Otherwise it would collide with the reset logic
+	 * of pins ACBUS 2 and 3.
+	 *
+	 * Pins ADBUS 4, 5 and 6 have no function.
+	 * For forward compatibility they shall be inputs.
+	 */
+	direction &= ~(MPSSE_PIN_ADBUS(7));
+	direction &= ~(MPSSE_PIN_ADBUS(4));
+	direction &= ~(MPSSE_PIN_ADBUS(5));
+	direction &= ~(MPSSE_PIN_ADBUS(6));
+
+	/*
+	 * Update the output values according to the function argument
+	 */
+	if (cs_b)
+	{
+		gpio |= MPSSE_PIN_ADBUS(3);
+	}
+	else
+	{
+		gpio &= ~(MPSSE_PIN_ADBUS(3));
+	}
+
+	/*
+	 * ACBUS 0 and 2 control the output enable
+	 * inputs of the two reset buffers.
+	 * Each reset output is disabled/high-z,
+	 * when it's respective /OE input is high.
+	 */
+	if (creset_b)
+	{
+		// Leave reset and jtag_trst outputs floating
+		gpio |= MPSSE_PIN_ACBUS(0);
+		gpio |= MPSSE_PIN_ACBUS(2);
+	}
+	else
+	{
+		// Pull reset and jtag_trst outputs to low
+		gpio &= ~(MPSSE_PIN_ACBUS(2));
+		gpio &= ~(MPSSE_PIN_ACBUS(0));
+	}
+
+	/*
+	 * Transmit values to FTDI chip
+	 */
+	mpsse_set_gpio(gpio, direction);
 }
+
 
 static inline bool get_cdone(void)
 {
@@ -226,7 +290,7 @@ static inline void flash_read_id()
 	 && (data[3] == 0xFF))
 	{
 		fprintf(stderr, "Illegal flash ID. Aborting.\n");
-		set_pins_highz();
+		flash_release_reset();
 		exit(1);
 	}
 }
@@ -432,7 +496,7 @@ static inline void flash_wait()
 			if (timeout++ > 200)
 			{
 				fprintf(stderr, "Timeout. Aborting.\n");
-				set_pins_highz();
+				flash_release_reset();
 				mpsse_close();
 				exit(1);
 			}
@@ -1023,8 +1087,6 @@ int main(int argc, char **argv)
 	// ---------------------------------------------------------
 	// Exit
 	// ---------------------------------------------------------
-
-	set_pins_highz();
 
 	fprintf(stderr, "Bye.\n");
 	mpsse_close();
