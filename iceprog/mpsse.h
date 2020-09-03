@@ -25,9 +25,8 @@
 /*
  * Pin masks
  */
-#define MPSSE_PIN_ADBUS3	0x08
-#define MPSSE_PIN_ADBUS4	0x10
-#define MPSSE_PIN_ADBUS7	0x80
+#define MPSSE_PIN_ADBUS(n)	((1 << n) & 0xff)
+#define MPSSE_PIN_ACBUS(n)	((1 << (n+8)) & 0xff00)
 
 
 void mpsse_check_rx(void);
@@ -37,7 +36,15 @@ void mpsse_send_byte(uint8_t data);
 void mpsse_send_spi(uint8_t *data, int n);
 void mpsse_xfer_spi(uint8_t *data, int n);
 uint8_t mpsse_xfer_spi_bits(uint8_t data, int n);
-void mpsse_set_gpio(uint8_t gpio, uint8_t direction);
+
+/**
+ * Write the state of the 16 bits
+ * defining GPIO direction and output state
+ * (for those pins which are outputs).
+ * See also FTDI AN-801 page 6.
+ */
+void mpsse_set_gpio(uint16_t gpio, uint16_t direction);
+
 int mpsse_readb_low(void);
 int mpsse_readb_high(void);
 void mpsse_send_dummy_bytes(uint8_t n);
